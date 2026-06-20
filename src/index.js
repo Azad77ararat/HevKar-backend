@@ -7,21 +7,38 @@ let firebaseAdmin = null;
 try {
   const admin = require('firebase-admin');
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (raw) {
-    const serviceAccount = JSON.parse(raw);
+  if (!raw) {
+    console.log('⚠️ FIREBASE_SERVICE_ACCOUNT not set');
+  } else {
+    console.log('🔍 FIREBASE_SERVICE_ACCOUNT length:', raw.length);
+    console.log('🔍 First 50 chars:', raw.substring(0, 50));
+    
+    let serviceAccount;
+    try {
+      serviceAccount = JSON.parse(raw);
+      console.log('✅ JSON parsed OK, project_id:', serviceAccount.project_id);
+    } catch (parseErr) {
+      console.error('❌ JSON parse failed:', parseErr.message);
+      throw parseErr;
+    }
+
     if (serviceAccount.private_key) {
       serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      console.log('✅ private_key fixed');
+    } else {
+      console.error('❌ private_key missing from service account!');
     }
+
     if (!admin.apps || admin.apps.length === 0) {
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
     }
     firebaseAdmin = admin;
-    console.log('✅ Firebase Admin initialized');
+    console.log('✅ Firebase Admin initialized successfully');
   }
 } catch (e) {
-  console.error('Firebase init error (non-fatal):', e.message);
+  console.error('❌ Firebase init error (non-fatal):', e.message);
   firebaseAdmin = null;
 }
 
