@@ -1,28 +1,26 @@
 const express = require('express');
 const cors = require('cors');
+const admin = require('firebase-admin');
 require('dotenv').config();
 
-// Firebase - سيُفعّل لاحقاً
-let admin = null;
+// تهيئة Firebase Admin
 try {
-  admin = require('firebase-admin');
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (raw) {
-    const serviceAccount = JSON.parse(raw);
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      console.log('✅ Firebase Admin initialized');
-    }
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  // إصلاح private_key
+  if (serviceAccount.private_key) {
+    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  }
+  if (serviceAccount.project_id && !admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log('✅ Firebase Admin initialized');
   }
 } catch (e) {
   console.error('Firebase init error (non-fatal):', e.message);
-  admin = null;
 }
 
-// تصدير admin للاستخدام في routes
-global.firebaseAdmin = admin;
+global.firebaseAdmin = admin.apps.length ? admin : null;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,7 +37,6 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/messages', require('./routes/messages'));
 
-// housing route - اختياري
 try {
   app.use('/api/housing', require('./routes/housing'));
 } catch(e) {
