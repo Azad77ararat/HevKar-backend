@@ -3,17 +3,26 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 require('dotenv').config();
 
-// تهيئة Firebase Admin من Environment Variable
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// تهيئة Firebase Admin
+try {
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  if (serviceAccount.project_id) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log('✅ Firebase Admin initialized');
+  } else {
+    console.log('⚠️ Firebase credentials not found, notifications disabled');
+  }
+} catch (e) {
+  console.error('Firebase init error:', e.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   res.setHeader('ngrok-skip-browser-warning', 'true');
   next();
