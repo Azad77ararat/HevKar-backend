@@ -6,7 +6,7 @@ const router = express.Router();
 
 const VALID_SECTORS = ['restaurants', 'warehouses', 'construction', 'cleaning', 'security', 'drivers', 'it', 'retail'];
 
-// GET /api/posts — get all posts (with filters)
+// GET /api/posts
 router.get('/', async (req, res) => {
   try {
     const { sector, type, city, search, limit = 50, offset = 0 } = req.query;
@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
       SELECT p.*, u.name AS user_name, u.phone AS user_phone
       FROM posts p
       JOIN users u ON p.user_id = u.id
-      WHERE p.is_active = TRUE AND p.expires_at > NOW()
+      WHERE p.is_active = TRUE AND (p.expires_at IS NULL OR p.expires_at > NOW())
     `;
     const params = [];
 
@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/posts/stats — get counts per sector
+// GET /api/posts/stats
 router.get('/stats', async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -47,7 +47,7 @@ router.get('/stats', async (req, res) => {
         SUM(type = 'employer') AS employers,
         SUM(type = 'jobseeker') AS jobseekers
       FROM posts
-      WHERE is_active = TRUE AND expires_at > NOW()
+      WHERE is_active = TRUE AND (expires_at IS NULL OR expires_at > NOW())
       GROUP BY sector
     `);
     res.json(rows);
@@ -56,7 +56,20 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// GET /api/posts/:id — get single post
+// GET /api/posts/user/my
+router.get('/user/my', authMiddleware, async (req, res) => {
+  try {
+    const [posts] = await db.query(
+      'SELECT * FROM posts WHERE user_id = ? AND is_active = TRUE ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/posts/:id
 router.get('/:id', async (req, res) => {
   try {
     const [posts] = await db.query(`
@@ -73,7 +86,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/posts — create post (auth required)
+// POST /api/posts
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { sector, role, description, city, phone, urgent } = req.body;
@@ -87,8 +100,8 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO posts (user_id, type, sector, role, description, city, phone, urgent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO posts (user_id, type, sector, role, description, city, phone, urgent, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
       [
         req.user.id,
         req.body.type || 'employer',
@@ -108,7 +121,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/posts/:id — update post (owner only)
+// PUT /api/posts/:id
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const [posts] = await db.query('SELECT * FROM posts WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
@@ -126,7 +139,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/posts/:id — delete post (owner only)
+// DELETE /api/posts/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const [result] = await db.query(
@@ -135,19 +148,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Post not found or not authorized.' });
     res.json({ message: 'Post deleted successfully.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-// GET /api/posts/user/my — get my posts
-router.get('/user/my', authMiddleware, async (req, res) => {
-  try {
-    const [posts] = await db.query(
-      'SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC',
-      [req.user.id]
-    );
-    res.json(posts);
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
