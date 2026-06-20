@@ -1,26 +1,31 @@
 const express = require('express');
 const cors = require('cors');
-const admin = require('firebase-admin');
 require('dotenv').config();
 
-// تهيئة Firebase Admin
+// Firebase Admin
+let firebaseAdmin = null;
 try {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-  // إصلاح private_key
-  if (serviceAccount.private_key) {
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-  }
-  if (serviceAccount.project_id && !admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+  const admin = require('firebase-admin');
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (raw) {
+    const serviceAccount = JSON.parse(raw);
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+    if (!admin.apps || admin.apps.length === 0) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    }
+    firebaseAdmin = admin;
     console.log('✅ Firebase Admin initialized');
   }
 } catch (e) {
   console.error('Firebase init error (non-fatal):', e.message);
+  firebaseAdmin = null;
 }
 
-global.firebaseAdmin = admin.apps.length ? admin : null;
+global.firebaseAdmin = firebaseAdmin;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
