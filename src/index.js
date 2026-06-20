@@ -1,22 +1,28 @@
 const express = require('express');
 const cors = require('cors');
-const admin = require('firebase-admin');
 require('dotenv').config();
 
-// تهيئة Firebase Admin
+// Firebase - سيُفعّل لاحقاً
+let admin = null;
 try {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-  if (serviceAccount.project_id) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log('✅ Firebase Admin initialized');
-  } else {
-    console.log('⚠️ Firebase credentials not found, notifications disabled');
+  admin = require('firebase-admin');
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (raw) {
+    const serviceAccount = JSON.parse(raw);
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      console.log('✅ Firebase Admin initialized');
+    }
   }
 } catch (e) {
-  console.error('Firebase init error:', e.message);
+  console.error('Firebase init error (non-fatal):', e.message);
+  admin = null;
 }
+
+// تصدير admin للاستخدام في routes
+global.firebaseAdmin = admin;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +38,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/messages', require('./routes/messages'));
-app.use('/api/housing', require('./routes/housing'));
+
+// housing route - اختياري
+try {
+  app.use('/api/housing', require('./routes/housing'));
+} catch(e) {
+  console.log('Housing route not available');
+}
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', app: 'HevKar API', version: '1.0.0' });
