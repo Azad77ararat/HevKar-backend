@@ -36,6 +36,7 @@ router.post('/login', async (req, res) => {
     const user = users[0];
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: 'Invalid email or password.' });
+    if (user.is_banned) return res.status(403).json({ error: 'Your account has been banned.' });
     const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email, name: user.name, city: user.city, phone: user.phone } });
   } catch (err) {
@@ -46,8 +47,9 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, email, name, phone, city, created_at FROM users WHERE id = ?', [req.user.id]);
+    const [users] = await db.query('SELECT id, email, name, phone, city, created_at, is_banned FROM users WHERE id = ?', [req.user.id]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (users[0].is_banned) return res.status(403).json({ error: 'Your account has been banned.' });
     res.json(users[0]);
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -58,6 +60,37 @@ router.put('/profile', authMiddleware, async (req, res) => {
     await db.query('UPDATE users SET name = ?, phone = ?, city = ? WHERE id = ?', [name, phone, city, req.user.id]);
     res.json({ message: 'Profile updated successfully.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// Ban/Unban user (admin only - protected by secret key)
+router.post('/ban/:userId', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+      return res.status(403).json({ error: 'Unauthorized.' });
+    }
+    const { userId } = req.params;
+    const { ban } = req.body; // true = ban, false = unban
+    await db.query('UPDATE users SET is_banned = ? WHERE id = ?', [ban ? 1 : 0, userId]);
+    res.json({ message: ban ? 'User banned successfully.' : 'User unbanned successfully.' });
+  } catch (err) {
+    console.error('Ban error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// Get all users (admin only)
+router.get('/users', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+      return res.status(403).json({ error: 'Unauthorized.' });
+    }
+    const [users] = await db.query('SELECT id, email, name, phone, city, is_banned, created_at FROM users ORDER BY created_at DESC');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;
