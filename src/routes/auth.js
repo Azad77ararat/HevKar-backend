@@ -62,6 +62,18 @@ router.put('/profile', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
+router.put('/profile-image', authMiddleware, async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) return res.status(400).json({ error: 'Image data is required.' });
+    await db.query('UPDATE users SET profile_image = ? WHERE id = ?', [image, req.user.id]);
+    res.json({ message: 'Profile image updated successfully.' });
+  } catch (err) {
+    console.error('Profile image update error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // Ban/Unban user (admin only - protected by secret key)
 router.post('/ban/:userId', async (req, res) => {
   try {
