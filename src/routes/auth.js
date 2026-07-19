@@ -5,6 +5,16 @@ const db = require('../db/connection');
 const authMiddleware = require('../middleware/auth');
 require('dotenv').config();
 
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 const router = express.Router();
 
 router.post('/register', async (req, res) => {
@@ -70,6 +80,32 @@ router.put('/profile-image', authMiddleware, async (req, res) => {
     res.json({ message: 'Profile image updated successfully.' });
   } catch (err) {
     console.error('Profile image update error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    const [users] = await db.query('SELECT id, name FROM users WHERE email = ?', [email.toLowerCase().trim()]);
+    if (users.length === 0) return res.status(404).json({ error: 'E-Mail nicht gefunden' });
+
+    const tempPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, users[0].id]);
+
+    await transporter.sendMail({
+      from: `"HevKar" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'HevKar - Passwort zurückgesetzt',
+      text: `Hallo ${users[0].name},\n\nIhr neues temporäres Passwort lautet: ${tempPassword}\n\nBitte melden Sie sich damit an und ändern Sie es anschließend in Ihrem Profil.\n\nIhr HevKar Team`,
+    });
+
+    res.json({ message: 'Ein neues Passwort wurde an Ihre E-Mail gesendet.' });
+  } catch (err) {
+    console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
