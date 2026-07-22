@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
     if (!validPassword) return res.status(401).json({ error: 'Invalid email or password.' });
     if (user.is_banned) return res.status(403).json({ error: 'Your account has been banned.' });
     const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email, name: user.name, city: user.city, phone: user.phone } });
+    res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email, name: user.name, city: user.city, phone: user.phone, profile_image: user.profile_image } });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Server error during login.' });
@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, email, name, phone, city, created_at, is_banned FROM users WHERE id = ?', [req.user.id]);
+    const [users] = await db.query('SELECT id, email, name, phone, city, profile_image, created_at, is_banned FROM users WHERE id = ?', [req.user.id]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found.' });
     if (users[0].is_banned) return res.status(403).json({ error: 'Your account has been banned.' });
     res.json(users[0]);
